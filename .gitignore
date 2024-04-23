@@ -1,0 +1,19 @@
+# Binaries
+bin/
+!bin/.gitkeep
+tmp/
+
+# Test binary, built with `go test -c`
+*.test
+
+# env
+.env
+
+# Go workspace file
+go.work
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store*
