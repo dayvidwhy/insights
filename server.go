@@ -70,20 +70,20 @@ func main() {
 			return err
 		}
 
+		if u.Url == "" {
+			return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"status": "fail",
+				"error":  "URL is empty.",
+			})
+		}
+
 		fmt.Println("Tracking URL: " + u.Url)
 		incrementPageView(db, u.Url)
 
-		// build response
-		response := map[string]string{
+		return c.JSON(http.StatusOK, map[string]string{
 			"status": "success",
 			"url":    u.Url,
-		}
-
-		if u.Url == "" {
-			response["status"] = "Empty"
-		}
-
-		return c.JSON(http.StatusOK, response)
+		})
 	})
 
 	e.GET("/views", func(c echo.Context) error {
