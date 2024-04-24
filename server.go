@@ -13,14 +13,21 @@ import (
 
 func incrementPageView(db *sql.DB, url string) {
 	fmt.Println("Incrementing page view for " + url)
-	_, err := db.Exec("INSERT INTO page_views (url, count) VALUES ($1, 1) ON CONFLICT (url) DO UPDATE SET count = page_views.count + 1", url)
+	_, err := db.Exec(`INSERT INTO page_views (url, count)
+		VALUES ($1, 1) ON CONFLICT (url)
+		DO UPDATE SET count = page_views.count + 1`,
+		url)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func setupDb() *sql.DB {
-	connStr := "postgres://" + os.Getenv("POSTGRES_USER") + ":" + os.Getenv("POSTGRES_PASSWORD") + "@" + os.Getenv("POSTGRES_HOST") + "/" + os.Getenv("POSTGRES_DB") + "?sslmode=disable"
+	connStr := "postgres://" +
+		os.Getenv("POSTGRES_USER") + ":" +
+		os.Getenv("POSTGRES_PASSWORD") + "@" +
+		os.Getenv("POSTGRES_HOST") + "/" +
+		os.Getenv("POSTGRES_DB") + "?sslmode=disable"
 	fmt.Println(connStr)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -77,6 +84,31 @@ func main() {
 		}
 
 		return c.JSON(http.StatusOK, response)
+	})
+
+	e.GET("/views", func(c echo.Context) error {
+		url := c.QueryParam("url")
+		row := db.QueryRow("SELECT count FROM page_views WHERE url = $1", url)
+		if row.Err() != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"status": "fail",
+				"error":  "URL is not tracked.",
+			})
+		}
+
+		var count int
+		err := row.Scan(&count)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"status": "fail",
+				"error":  "Internal error.",
+			})
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"status": "success",
+			"views":  count,
+		})
 	})
 
 	e.Logger.Fatal(e.Start(":1323"))
