@@ -46,6 +46,42 @@ func FetchPageViews(url string) int {
 	return count
 }
 
+type PageView struct {
+	Url  string `json:"url"`
+	Time string `json:"time"`
+}
+
+type PageViews []struct {
+	Url  string `json:"url"`
+	Time string `json:"time"`
+}
+
+func FetchPageViewsByDate(url string, start string, end string) PageViews {
+	rows, err := db.Query(`
+		SELECT url, createdAt
+		FROM page_views_individual
+		WHERE url = $1 AND createdAt BETWEEN $2 AND $3
+	`, url, start, end)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// defer closing until we're done with the rows
+	defer rows.Close()
+
+	var pageViews PageViews
+	for rows.Next() {
+		var pageView PageView
+		err := rows.Scan(&pageView.Url, &pageView.Time)
+		if err != nil {
+			panic(err)
+		}
+		pageViews = append(pageViews, pageView)
+	}
+	return pageViews
+}
+
 // Instantiate the database connection
 func SetupDb() {
 	// Create the connection from env variables

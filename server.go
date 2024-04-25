@@ -23,6 +23,17 @@ type ViewCountFetch struct {
 	Url    string `json:"url"`
 }
 
+type ViewCountFetchByDate struct {
+	Status string `json:"status"`
+	Start  string `json:"start"`
+	End    string `json:"end"`
+	Url    string `json:"url"`
+	Views  []struct {
+		Url  string `json:"url"`
+		Time string `json:"time"`
+	}
+}
+
 // Payload to POST /views
 type PageView struct {
 	Url string `json:"url"`
@@ -36,7 +47,10 @@ func main() {
 		return c.String(http.StatusOK, "Blank")
 	})
 
-	e.POST("/views", func(c echo.Context) error {
+	/*
+	* Create a new page view.
+	 */
+	e.POST("/views/create", func(c echo.Context) error {
 		// get the JSON body from the request
 		u := new(PageView)
 		if err := c.Bind(u); err != nil {
@@ -61,13 +75,34 @@ func main() {
 		})
 	})
 
-	e.GET("/views", func(c echo.Context) error {
+	/*
+	* Fetch page views for a given URL.
+	 */
+	e.GET("/views/count", func(c echo.Context) error {
 		url := c.QueryParam("url")
 
 		return c.JSON(http.StatusOK, &ViewCountFetch{
 			Status: "success",
 			Views:  database.FetchPageViews(url),
 			Url:    url,
+		})
+	})
+
+	/*
+	 * Fetch page views by date.
+	 * Example: /views/counts?url=[url]&start=2021-01-01&end=2021-01-31
+	 */
+	e.GET("/views/counts", func(c echo.Context) error {
+		url := c.QueryParam("url")
+		start := c.QueryParam("start")
+		end := c.QueryParam("end")
+		pageViews := database.FetchPageViewsByDate(url, start, end)
+		return c.JSON(http.StatusOK, &ViewCountFetchByDate{
+			Status: "success",
+			Start:  start,
+			End:    end,
+			Url:    url,
+			Views:  pageViews,
 		})
 	})
 
