@@ -47,18 +47,16 @@ func FetchPageViews(url string) int {
 }
 
 type PageView struct {
-	Url  string `json:"url"`
 	Time string `json:"time"`
 }
 
 type PageViews []struct {
-	Url  string `json:"url"`
 	Time string `json:"time"`
 }
 
 func FetchPageViewsByDate(url string, start string, end string) PageViews {
 	rows, err := db.Query(`
-		SELECT url, createdAt
+		SELECT createdAt
 		FROM page_views_individual
 		WHERE url = $1 AND createdAt BETWEEN $2 AND $3
 	`, url, start, end)
@@ -73,7 +71,7 @@ func FetchPageViewsByDate(url string, start string, end string) PageViews {
 	var pageViews PageViews
 	for rows.Next() {
 		var pageView PageView
-		err := rows.Scan(&pageView.Url, &pageView.Time)
+		err := rows.Scan(&pageView.Time)
 		if err != nil {
 			panic(err)
 		}

@@ -29,7 +29,6 @@ type ViewCountFetchByDate struct {
 	End    string `json:"end"`
 	Url    string `json:"url"`
 	Views  []struct {
-		Url  string `json:"url"`
 		Time string `json:"time"`
 	}
 }
