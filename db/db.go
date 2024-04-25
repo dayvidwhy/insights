@@ -20,6 +20,15 @@ func IncrementPageView(url string) {
 	if err != nil {
 		panic(err)
 	}
+
+	_, e := db.Exec(`
+		INSERT INTO page_views_individual (url)
+		VALUES ($1)
+	`, url)
+
+	if e != nil {
+		panic(e)
+	}
 }
 
 // Retrieve page views for a given URL, return 0 count if not found
@@ -53,11 +62,23 @@ func SetupDb() {
 		panic(err)
 	}
 	fmt.Println("Connected to database")
+
+	// Setup table to store overall pageviews
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS page_views (
 		id SERIAL PRIMARY KEY,
 		url TEXT NOT NULL,
 		count INT NOT NULL DEFAULT 0,
 		UNIQUE(url)
+	)`)
+	if err != nil {
+		panic(err)
+	}
+
+	// Setup table to store individual pageviews
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS page_views_individual (
+		id SERIAL PRIMARY KEY,
+		url TEXT NOT NULL,
+		createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`)
 	if err != nil {
 		panic(err)
