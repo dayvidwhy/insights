@@ -10,18 +10,27 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type Response struct {
+// Response type for counting views
+type ViewCountResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Url     string `json:"url"`
+}
+
+type ViewCountFetch struct {
 	Status string `json:"status"`
+	Views  int    `json:"views"`
 	Url    string `json:"url"`
 }
 
+// Payload to POST /views
 type PageView struct {
 	Url string `json:"url"`
 }
 
 func main() {
 	e := echo.New()
-	localDb := database.SetupDb()
+	database.SetupDb()
 
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Blank")
@@ -35,27 +44,30 @@ func main() {
 		}
 
 		if u.Url == "" {
-			return c.JSON(http.StatusBadRequest, map[string]interface{}{
-				"status": "fail",
-				"error":  "URL is empty.",
+			return c.JSON(http.StatusBadRequest, &ViewCountResponse{
+				Status:  "fail",
+				Message: "URL is empty.",
+				Url:     "",
 			})
 		}
 
 		fmt.Println("Tracking URL: " + u.Url)
-		database.IncrementPageView(localDb, u.Url)
+		database.IncrementPageView(u.Url)
 
-		return c.JSON(http.StatusOK, map[string]string{
-			"status": "success",
-			"url":    u.Url,
+		return c.JSON(http.StatusOK, &ViewCountResponse{
+			Status:  "success",
+			Message: "URL has been tracked.",
+			Url:     u.Url,
 		})
 	})
 
 	e.GET("/views", func(c echo.Context) error {
 		url := c.QueryParam("url")
 
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"status": "success",
-			"views":  database.FetchPageViews(localDb, url),
+		return c.JSON(http.StatusOK, &ViewCountFetch{
+			Status: "success",
+			Views:  database.FetchPageViews(url),
+			Url:    url,
 		})
 	})
 

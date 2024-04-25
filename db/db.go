@@ -8,9 +8,11 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// Package level variable to hold our DB pointer
+var db *sql.DB
+
 // Increment the page view count for a URL
-func IncrementPageView(db *sql.DB, url string) {
-	fmt.Println("Incrementing page view for " + url)
+func IncrementPageView(url string) {
 	_, err := db.Exec(`
 		INSERT INTO page_views (url, count)
 		VALUES ($1, 1) ON CONFLICT (url)
@@ -20,7 +22,9 @@ func IncrementPageView(db *sql.DB, url string) {
 	}
 }
 
-func FetchPageViews(db *sql.DB, url string) int {
+// Retrieve page views for a given URL, return 0 count if not found
+func FetchPageViews(url string) int {
+	fmt.Println("Fetch pageviews for " + url)
 	row := db.QueryRow(`
 		SELECT count
 		FROM page_views
@@ -34,14 +38,17 @@ func FetchPageViews(db *sql.DB, url string) int {
 }
 
 // Instantiate the database connection
-func SetupDb() *sql.DB {
+func SetupDb() {
+	// Create the connection from env variables
 	connStr := "postgres://" +
 		os.Getenv("POSTGRES_USER") + ":" +
 		os.Getenv("POSTGRES_PASSWORD") + "@" +
 		os.Getenv("POSTGRES_HOST") + "/" +
 		os.Getenv("POSTGRES_DB") + "?sslmode=disable"
 
-	db, err := sql.Open("postgres", connStr)
+	// Setup our connection
+	var err error
+	db, err = sql.Open("postgres", connStr)
 	if err != nil {
 		panic(err)
 	}
@@ -55,5 +62,4 @@ func SetupDb() *sql.DB {
 	if err != nil {
 		panic(err)
 	}
-	return db
 }
