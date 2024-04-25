@@ -84,7 +84,7 @@ func FetchPageViewsByDate(
 		err := rows.Scan(&pageView.Time)
 		if err != nil {
 			fmt.Println("Error fetching page views by date: ", err)
-			return pageViews, err
+			return nil, err
 		}
 		pageViews = append(pageViews, pageView)
 	}
