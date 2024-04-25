@@ -95,7 +95,13 @@ func SetupDb() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Connected to database")
+
+	// Test the connection
+	err = db.Ping()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Connected to database successfully.")
 
 	// Setup table to store overall pageviews
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS page_views (
