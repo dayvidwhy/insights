@@ -17,13 +17,13 @@ type ViewCountResponse struct {
 	Url     string `json:"url"`
 }
 
-type ViewCountFetch struct {
+type ViewsCountFetch struct {
 	Status string `json:"status"`
 	Views  int    `json:"views"`
 	Url    string `json:"url"`
 }
 
-type ViewCountFetchByDate struct {
+type ViewsCountFetchByDate struct {
 	Status string `json:"status"`
 	Start  string `json:"start"`
 	End    string `json:"end"`
@@ -80,9 +80,11 @@ func main() {
 	e.GET("/views/count", func(c echo.Context) error {
 		url := c.QueryParam("url")
 
-		return c.JSON(http.StatusOK, &ViewCountFetch{
+		pageViews := database.FetchPageViews(url)
+
+		return c.JSON(http.StatusOK, &ViewsCountFetch{
 			Status: "success",
-			Views:  database.FetchPageViews(url),
+			Views:  pageViews,
 			Url:    url,
 		})
 	})
@@ -95,8 +97,19 @@ func main() {
 		url := c.QueryParam("url")
 		start := c.QueryParam("start")
 		end := c.QueryParam("end")
-		pageViews := database.FetchPageViewsByDate(url, start, end)
-		return c.JSON(http.StatusOK, &ViewCountFetchByDate{
+		pageViews, err := database.FetchPageViewsByDate(url, start, end)
+
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, &ViewsCountFetchByDate{
+				Status: "fail",
+				Start:  start,
+				End:    end,
+				Url:    url,
+				Views:  nil,
+			})
+		}
+
+		return c.JSON(http.StatusOK, &ViewsCountFetchByDate{
 			Status: "success",
 			Start:  start,
 			End:    end,

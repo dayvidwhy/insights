@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 
 	_ "github.com/lib/pq"
@@ -12,37 +13,39 @@ import (
 var db *sql.DB
 
 // Increment the page view count for a URL
-func IncrementPageView(url string) {
+func IncrementPageView(url string) error {
 	_, err := db.Exec(`
 		INSERT INTO page_views (url, count)
 		VALUES ($1, 1) ON CONFLICT (url)
 		DO UPDATE SET count = page_views.count + 1`, url)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	_, e := db.Exec(`
+	_, err = db.Exec(`
 		INSERT INTO page_views_individual (url)
 		VALUES ($1)
 	`, url)
 
-	if e != nil {
-		panic(e)
-	}
+	return err
 }
 
 // Retrieve page views for a given URL, return 0 count if not found
 func FetchPageViews(url string) int {
-	fmt.Println("Fetch pageviews for " + url)
+	fmt.Println("Fetch pageviews for: " + url)
 	row := db.QueryRow(`
 		SELECT count
 		FROM page_views
 		WHERE url = $1`, url)
+
 	var count int
 	err := row.Scan(&count)
+
+	// If we don't find a record, return 0
 	if err != nil {
 		return 0
 	}
+
 	return count
 }
 
@@ -54,7 +57,15 @@ type PageViews []struct {
 	Time string `json:"time"`
 }
 
-func FetchPageViewsByDate(url string, start string, end string) PageViews {
+func FetchPageViewsByDate(
+	url string,
+	start string,
+	end string,
+) (
+	PageViews,
+	error,
+) {
+	var pageViews PageViews
 	rows, err := db.Query(`
 		SELECT createdAt
 		FROM page_views_individual
@@ -62,22 +73,22 @@ func FetchPageViewsByDate(url string, start string, end string) PageViews {
 	`, url, start, end)
 
 	if err != nil {
-		panic(err)
+		return pageViews, err
 	}
 
 	// defer closing until we're done with the rows
 	defer rows.Close()
 
-	var pageViews PageViews
 	for rows.Next() {
 		var pageView PageView
 		err := rows.Scan(&pageView.Time)
 		if err != nil {
-			panic(err)
+			fmt.Println("Error fetching page views by date: ", err)
+			return pageViews, err
 		}
 		pageViews = append(pageViews, pageView)
 	}
-	return pageViews
+	return pageViews, nil
 }
 
 // Instantiate the database connection
@@ -93,13 +104,13 @@ func SetupDb() {
 	var err error
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Test the connection
 	err = db.Ping()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	fmt.Println("Connected to database successfully.")
 
@@ -111,7 +122,7 @@ func SetupDb() {
 		UNIQUE(url)
 	)`)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Setup table to store individual pageviews
@@ -121,6 +132,6 @@ func SetupDb() {
 		createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }
