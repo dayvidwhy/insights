@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	database "insights/db"
 	accounts "insights/lib/accounts"
+	auth "insights/lib/auth"
 	views "insights/lib/views"
 	"net/http"
-	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/labstack/echo/v4"
@@ -19,75 +18,6 @@ type PageView struct {
 	Url string `json:"url"`
 }
 
-// Validate access token for posting pageviews from clients
-func tokenAuth(c echo.Context) (int, error) {
-	auth := c.Request().Header.Get("Authorization")
-
-	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
-		return 0, echo.NewHTTPError(http.StatusUnauthorized, "Authentication required")
-	}
-	token := strings.TrimPrefix(auth, "Bearer ")
-
-	var err = accounts.ValidateAccessToken(token)
-	if err != nil {
-		return 0, c.JSON(http.StatusUnauthorized, &views.ViewCountResponse{
-			Status:  "fail",
-			Message: "Unauthorized",
-			Url:     "",
-		})
-	}
-
-	// Get the account ID from the token
-	accountId, err := accounts.GetAccountIdFromToken(token)
-	if err != nil {
-		return 0, c.JSON(http.StatusUnauthorized, &views.ViewCountResponse{
-			Status:  "fail",
-			Message: "Unauthorized",
-			Url:     "",
-		})
-	}
-
-	return accountId, nil
-}
-
-// Pull auth credentials off header
-func extractAuth(c echo.Context) (string, string, error) {
-	auth := c.Request().Header.Get("Authorization")
-	if auth == "" || !strings.HasPrefix(auth, "Basic ") {
-		return "", "", echo.NewHTTPError(http.StatusUnauthorized, "Authentication required")
-	}
-	userpass := strings.TrimPrefix(auth, "Basic ")
-	decoded, err := base64.StdEncoding.DecodeString(userpass)
-	if err != nil {
-		return "", "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid credentials")
-	}
-	creds := strings.Split(string(decoded), ":")
-	if len(creds) != 2 {
-		return "", "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid credentials")
-	}
-	return creds[0], creds[1], nil
-}
-
-// Validate user credentials for fetching pageviews
-func userAuth(c echo.Context) (int, error) {
-	email, password, err := extractAuth(c)
-
-	if err != nil {
-		return 0, c.JSON(http.StatusUnauthorized, &accounts.AccountResponse{
-			Status:  "fail",
-			Message: "Auth failed.",
-			Email:   email,
-		})
-	}
-
-	accountId, err := accounts.LogInUser(email, password)
-	if err != nil {
-		return 0, echo.NewHTTPError(http.StatusUnauthorized, "Invalid credentials")
-	}
-
-	return accountId, nil
-}
-
 func main() {
 	e := echo.New()
 	database.SetupDb()
@@ -96,9 +26,9 @@ func main() {
 
 	// Create a new page view.
 	e.POST("/views/create", func(c echo.Context) error {
-		accountId, err := tokenAuth(c)
+		token, err := auth.TokenAuth(c)
 		if err != nil {
-			return err
+			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
 
 		u := new(PageView)
@@ -107,11 +37,13 @@ func main() {
 		}
 
 		if u.Url == "" {
-			return c.JSON(http.StatusBadRequest, &views.ViewCountResponse{
-				Status:  "fail",
-				Message: "URL is empty.",
-				Url:     "",
-			})
+			return echo.NewHTTPError(http.StatusBadRequest, "URL is empty.")
+		}
+
+		// Get the account ID from the token
+		accountId, err := accounts.GetAccountIdFromToken(token)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
 
 		fmt.Println("Tracking URL: " + u.Url)
@@ -126,7 +58,7 @@ func main() {
 
 	// Fetch page views for a given URL.
 	e.GET("/views/count", func(c echo.Context) error {
-		accountId, err := userAuth(c)
+		accountId, err := auth.UserAuth(c)
 		if err != nil {
 			return err
 		}
@@ -146,7 +78,7 @@ func main() {
 	 * Example: /views/counts?url=[url]&start=2021-01-01&end=2021-01-31
 	 */
 	e.GET("/views/counts", func(c echo.Context) error {
-		accountId, err := userAuth(c)
+		accountId, err := auth.UserAuth(c)
 		if err != nil {
 			return err
 		}
@@ -157,13 +89,7 @@ func main() {
 		pageViews, err := views.FetchPageViewsByDate(accountId, url, start, end)
 
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, &views.ViewsCountFetchByDate{
-				Status: "fail",
-				Start:  start,
-				End:    end,
-				Url:    url,
-				Views:  nil,
-			})
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error fetching page views by date.")
 		}
 
 		return c.JSON(http.StatusOK, &views.ViewsCountFetchByDate{
@@ -183,21 +109,13 @@ func main() {
 		}
 
 		if u.Email == "" || u.Password == "" {
-			return c.JSON(http.StatusBadRequest, &accounts.AccountResponse{
-				Status:  "fail",
-				Message: "Email or password is empty.",
-				Email:   u.Email,
-			})
+			return echo.NewHTTPError(http.StatusBadRequest, "Email or password is empty.")
 		}
 
 		err := accounts.CreateUserAccount(u.Email, u.Password)
 
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, &accounts.AccountResponse{
-				Status:  "fail",
-				Message: "Error creating account.",
-				Email:   u.Email,
-			})
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error creating account.")
 		}
 
 		return c.JSON(http.StatusOK, &accounts.AccountResponse{
@@ -208,19 +126,15 @@ func main() {
 	})
 
 	e.GET("/accounts/token", func(c echo.Context) error {
-		accountId, err := userAuth(c)
+		accountId, err := auth.UserAuth(c)
 		if err != nil {
 			return err
 		}
 
-		email, _, _ := extractAuth(c)
+		email, _, _ := auth.ExtractAuth(c)
 		token, err := accounts.CreateAccessToken(accountId)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, &accounts.AccountResponse{
-				Status:  "fail",
-				Message: "Error creating token.",
-				Email:   email,
-			})
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error creating token.")
 		}
 
 		return c.JSON(http.StatusOK, &accounts.AccountTokenResponse{

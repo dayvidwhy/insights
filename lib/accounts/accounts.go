@@ -62,7 +62,7 @@ func GetAccountIdFromToken(token string) (int, error) {
 	var accountId int
 	err := row.Scan(&accountId)
 	if err != nil {
-		return 0, err
+		return 0, errors.New("invalid token")
 	}
 
 	return accountId, nil
@@ -80,8 +80,7 @@ func LogInUser(email string, password string) (int, error) {
 	var queriedId int
 	err := row.Scan(&queriedEmail, &queriedPassword, &queriedId)
 	if err != nil {
-		log.Println("Error logging in user id: " + email)
-		log.Println(err)
+		log.Println("Error logging in user id: " + email + "err: " + err.Error())
 		return 0, err
 	}
 
