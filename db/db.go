@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"os"
 
@@ -33,5 +32,5 @@ func SetupDb() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Connected to database successfully.")
+	log.Println("Connected to database successfully.")
 }

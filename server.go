@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
 	database "insights/db"
 	accounts "insights/lib/accounts"
 	auth "insights/lib/auth"
 	views "insights/lib/views"
+	"log"
 	"net/http"
+	"time"
 
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/labstack/echo/v4"
@@ -41,7 +42,7 @@ func main() {
 			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
 
-		fmt.Println("Tracking URL: " + u.Url)
+		log.Println("Tracking URL: " + u.Url)
 		views.IncrementPageView(accountId, u.Url)
 
 		return c.JSON(http.StatusOK, &views.ViewCountResponse{
@@ -81,6 +82,14 @@ func main() {
 		url := c.QueryParam("url")
 		start := c.QueryParam("start")
 		end := c.QueryParam("end")
+		_, err = time.Parse("2006-01-02 15:04:05.000", start)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date:"+start+". Please use UTC in the format: yyyy-mm-dd hh:mm:ss.fff")
+		}
+		_, err = time.Parse("2006-01-02 15:04:05.000", end)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date:"+end+". Please use UTC in the format: yyyy-mm-dd hh:mm:ss.fff")
+		}
 		pageViews, err := views.FetchPageViewsByDate(accountId, url, start, end)
 
 		if err != nil {

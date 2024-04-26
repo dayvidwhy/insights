@@ -1,7 +1,6 @@
 package views
 
 import (
-	"fmt"
 	db "insights/db"
 	"log"
 )
@@ -92,7 +91,7 @@ func IncrementPageView(accountId int, url string) error {
 
 // Retrieve page views for a given URL, return 0 count if not found
 func FetchPageViews(accountId int, url string) int {
-	fmt.Println("Fetch pageviews for: " + url)
+	log.Println("Fetch pageviews for: " + url)
 	row := db.Database.QueryRow(`
 		SELECT count
 		FROM page_views
@@ -139,7 +138,7 @@ func FetchPageViewsByDate(
 		var pageView PageView
 		err := rows.Scan(&pageView.Time)
 		if err != nil {
-			fmt.Println("Error fetching page views by date: ", err)
+			log.Println("Error fetching page views by date: ", err)
 			return nil, err
 		}
 		pageViews = append(pageViews, pageView)
