@@ -40,6 +40,4 @@ services:
       - db
 
 volumes:
-  deps:
-  build:
   pgdata:
