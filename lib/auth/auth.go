@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"encoding/base64"
 	"errors"
 	accounts "insights/lib/accounts"
 	"strings"
@@ -24,38 +23,4 @@ func TokenAuth(c echo.Context) (string, error) {
 	}
 
 	return token, nil
-}
-
-// Pull auth credentials off header
-func ExtractAuth(c echo.Context) (string, string, error) {
-	auth := c.Request().Header.Get("Authorization")
-	if auth == "" || !strings.HasPrefix(auth, "Basic ") {
-		return "", "", errors.New("authentication required")
-	}
-	userpass := strings.TrimPrefix(auth, "Basic ")
-	decoded, err := base64.StdEncoding.DecodeString(userpass)
-	if err != nil {
-		return "", "", errors.New("invalid credentials")
-	}
-	creds := strings.Split(string(decoded), ":")
-	if len(creds) != 2 {
-		return "", "", errors.New("invalid credentials")
-	}
-	return creds[0], creds[1], nil
-}
-
-// Validate user credentials for fetching pageviews
-func UserAuth(c echo.Context) (int, error) {
-	email, password, err := ExtractAuth(c)
-
-	if err != nil {
-		return 0, err
-	}
-
-	accountId, err := accounts.LogInUser(email, password)
-	if err != nil {
-		return 0, errors.New("login failed")
-	}
-
-	return accountId, nil
 }

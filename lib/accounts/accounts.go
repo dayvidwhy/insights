@@ -19,7 +19,6 @@ type User struct {
 type AccountResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
-	Email   string `json:"email"`
 }
 
 type AccountTokenResponse struct {
