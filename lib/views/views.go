@@ -19,14 +19,24 @@ type ViewsCountFetch struct {
 	Url    string `json:"url"`
 }
 
+type PageView struct {
+	Time string `json:"time"`
+}
+
+type PageViews []struct {
+	Time string `json:"time"`
+}
+
 type ViewsCountFetchByDate struct {
 	Status string `json:"status"`
 	Start  string `json:"start"`
 	End    string `json:"end"`
 	Url    string `json:"url"`
-	Views  []struct {
-		Time string `json:"time"`
-	}
+	Views  PageViews
+}
+
+type PageViewSubmit struct {
+	Url string `json:"url"`
 }
 
 // Setup table to store overall pageviews
@@ -98,14 +108,6 @@ func FetchPageViews(accountId int, url string) int {
 	}
 
 	return count
-}
-
-type PageView struct {
-	Time string `json:"time"`
-}
-
-type PageViews []struct {
-	Time string `json:"time"`
 }
 
 func FetchPageViewsByDate(

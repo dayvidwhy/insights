@@ -25,7 +25,6 @@ type AccountResponse struct {
 type AccountTokenResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
-	Email   string `json:"email"`
 	Token   string `json:"token"`
 }
 

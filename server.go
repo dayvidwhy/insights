@@ -13,11 +13,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// Payload to POST /views
-type PageView struct {
-	Url string `json:"url"`
-}
-
 func main() {
 	e := echo.New()
 	database.SetupDb()
@@ -31,7 +26,7 @@ func main() {
 			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
 
-		u := new(PageView)
+		u := new(views.PageViewSubmit)
 		if err := c.Bind(u); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
 		}
