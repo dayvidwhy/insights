@@ -14,7 +14,6 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
-	_ "github.com/lib/pq"
 )
 
 // Extract the account ID from the JWT token
