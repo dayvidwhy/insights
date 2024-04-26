@@ -33,7 +33,7 @@ func main() {
 
 		u := new(PageView)
 		if err := c.Bind(u); err != nil {
-			return err
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
 		}
 
 		if u.Url == "" {
@@ -60,7 +60,7 @@ func main() {
 	e.GET("/views/count", func(c echo.Context) error {
 		accountId, err := auth.UserAuth(c)
 		if err != nil {
-			return err
+			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
 
 		url := c.QueryParam("url")
@@ -80,7 +80,7 @@ func main() {
 	e.GET("/views/counts", func(c echo.Context) error {
 		accountId, err := auth.UserAuth(c)
 		if err != nil {
-			return err
+			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
 
 		url := c.QueryParam("url")
@@ -128,10 +128,9 @@ func main() {
 	e.GET("/accounts/token", func(c echo.Context) error {
 		accountId, err := auth.UserAuth(c)
 		if err != nil {
-			return err
+			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
 
-		email, _, _ := auth.ExtractAuth(c)
 		token, err := accounts.CreateAccessToken(accountId)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Error creating token.")
@@ -140,7 +139,6 @@ func main() {
 		return c.JSON(http.StatusOK, &accounts.AccountTokenResponse{
 			Status:  "success",
 			Message: "Authorized",
-			Email:   email,
 			Token:   token,
 		})
 	})

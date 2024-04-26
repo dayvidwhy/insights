@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	accounts "insights/lib/accounts"
-	"net/http"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -31,16 +30,16 @@ func TokenAuth(c echo.Context) (string, error) {
 func ExtractAuth(c echo.Context) (string, string, error) {
 	auth := c.Request().Header.Get("Authorization")
 	if auth == "" || !strings.HasPrefix(auth, "Basic ") {
-		return "", "", echo.NewHTTPError(http.StatusUnauthorized, "Authentication required")
+		return "", "", errors.New("authentication required")
 	}
 	userpass := strings.TrimPrefix(auth, "Basic ")
 	decoded, err := base64.StdEncoding.DecodeString(userpass)
 	if err != nil {
-		return "", "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid credentials")
+		return "", "", errors.New("invalid credentials")
 	}
 	creds := strings.Split(string(decoded), ":")
 	if len(creds) != 2 {
-		return "", "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid credentials")
+		return "", "", errors.New("invalid credentials")
 	}
 	return creds[0], creds[1], nil
 }
@@ -55,7 +54,7 @@ func UserAuth(c echo.Context) (int, error) {
 
 	accountId, err := accounts.LogInUser(email, password)
 	if err != nil {
-		return 0, echo.NewHTTPError(http.StatusUnauthorized, "Login failed")
+		return 0, errors.New("login failed")
 	}
 
 	return accountId, nil
