@@ -148,7 +148,7 @@ func loginUser(c echo.Context) error {
 	claims := token.Claims.(jwt.MapClaims)
 	claims["email"] = u.Email
 	claims["accountId"] = accountId
-	claims["exp"] = time.Now().Add(time.Second * 72).Unix()
+	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
 
 	t, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 	if err != nil {
