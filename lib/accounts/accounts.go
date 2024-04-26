@@ -54,29 +54,44 @@ func SetupAccounts() {
 	}
 }
 
-func LogInUser(email string, password string) error {
+func GetAccountIdFromToken(token string) (int, error) {
+	row := db.Database.QueryRow(`
+		SELECT accountId FROM access_tokens
+		WHERE token = $1`, token)
+
+	var accountId int
+	err := row.Scan(&accountId)
+	if err != nil {
+		return 0, err
+	}
+
+	return accountId, nil
+}
+
+func LogInUser(email string, password string) (int, error) {
 	// Check if the user exists
 	row := db.Database.QueryRow(`
-		SELECT email, password
+		SELECT email, password, id
 		FROM accounts
 		WHERE email = $1`, email)
 
 	var queriedEmail string
 	var queriedPassword string
-	err := row.Scan(&queriedEmail, &queriedPassword)
+	var queriedId int
+	err := row.Scan(&queriedEmail, &queriedPassword, &queriedId)
 	if err != nil {
 		log.Println("Error logging in user id: " + email)
 		log.Println(err)
-		return err
+		return 0, err
 	}
 
 	// Check if the password matches
 	if err := bcrypt.CompareHashAndPassword([]byte(queriedPassword), []byte(password)); err != nil {
 		log.Println(err)
-		return err
+		return 0, err
 	}
 
-	return nil
+	return queriedId, nil
 }
 
 func CreateUserAccount(
@@ -123,20 +138,7 @@ func generateToken(length int) (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-func CreateAccessToken(email string) (string, error) {
-	// lookup accountId from table
-	row := db.Database.QueryRow(`
-		SELECT id FROM accounts
-		WHERE email = $1`, email)
-
-	var accountId int
-	err := row.Scan(&accountId)
-	if err != nil {
-		log.Println(err)
-		log.Println("Error reading account id")
-		return "", err
-	}
-
+func CreateAccessToken(accountId int) (string, error) {
 	// Generate a random token
 	token, err := generateToken(64)
 	if err != nil {

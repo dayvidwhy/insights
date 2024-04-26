@@ -20,24 +20,34 @@ type PageView struct {
 }
 
 // Validate access token for posting pageviews from clients
-func tokenAuth(c echo.Context) error {
+func tokenAuth(c echo.Context) (int, error) {
 	auth := c.Request().Header.Get("Authorization")
 
 	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
-		return echo.NewHTTPError(http.StatusUnauthorized, "Authentication required")
+		return 0, echo.NewHTTPError(http.StatusUnauthorized, "Authentication required")
 	}
 	token := strings.TrimPrefix(auth, "Bearer ")
 
 	var err = accounts.ValidateAccessToken(token)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, &views.ViewCountResponse{
+		return 0, c.JSON(http.StatusUnauthorized, &views.ViewCountResponse{
 			Status:  "fail",
 			Message: "Unauthorized",
 			Url:     "",
 		})
 	}
 
-	return nil
+	// Get the account ID from the token
+	accountId, err := accounts.GetAccountIdFromToken(token)
+	if err != nil {
+		return 0, c.JSON(http.StatusUnauthorized, &views.ViewCountResponse{
+			Status:  "fail",
+			Message: "Unauthorized",
+			Url:     "",
+		})
+	}
+
+	return accountId, nil
 }
 
 // Pull auth credentials off header
@@ -59,22 +69,23 @@ func extractAuth(c echo.Context) (string, string, error) {
 }
 
 // Validate user credentials for fetching pageviews
-func userAuth(c echo.Context) error {
+func userAuth(c echo.Context) (int, error) {
 	email, password, err := extractAuth(c)
 
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, &accounts.AccountResponse{
+		return 0, c.JSON(http.StatusUnauthorized, &accounts.AccountResponse{
 			Status:  "fail",
 			Message: "Auth failed.",
 			Email:   email,
 		})
 	}
 
-	if err := accounts.LogInUser(email, password); err != nil {
-		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid credentials")
+	accountId, err := accounts.LogInUser(email, password)
+	if err != nil {
+		return 0, echo.NewHTTPError(http.StatusUnauthorized, "Invalid credentials")
 	}
 
-	return nil
+	return accountId, nil
 }
 
 func main() {
@@ -85,7 +96,8 @@ func main() {
 
 	// Create a new page view.
 	e.POST("/views/create", func(c echo.Context) error {
-		if err := tokenAuth(c); err != nil {
+		accountId, err := tokenAuth(c)
+		if err != nil {
 			return err
 		}
 
@@ -103,7 +115,7 @@ func main() {
 		}
 
 		fmt.Println("Tracking URL: " + u.Url)
-		views.IncrementPageView(u.Url)
+		views.IncrementPageView(accountId, u.Url)
 
 		return c.JSON(http.StatusOK, &views.ViewCountResponse{
 			Status:  "success",
@@ -114,12 +126,13 @@ func main() {
 
 	// Fetch page views for a given URL.
 	e.GET("/views/count", func(c echo.Context) error {
-		if err := userAuth(c); err != nil {
+		accountId, err := userAuth(c)
+		if err != nil {
 			return err
 		}
 
 		url := c.QueryParam("url")
-		pageViews := views.FetchPageViews(url)
+		pageViews := views.FetchPageViews(accountId, url)
 
 		return c.JSON(http.StatusOK, &views.ViewsCountFetch{
 			Status: "success",
@@ -133,14 +146,15 @@ func main() {
 	 * Example: /views/counts?url=[url]&start=2021-01-01&end=2021-01-31
 	 */
 	e.GET("/views/counts", func(c echo.Context) error {
-		if err := userAuth(c); err != nil {
+		accountId, err := userAuth(c)
+		if err != nil {
 			return err
 		}
 
 		url := c.QueryParam("url")
 		start := c.QueryParam("start")
 		end := c.QueryParam("end")
-		pageViews, err := views.FetchPageViewsByDate(url, start, end)
+		pageViews, err := views.FetchPageViewsByDate(accountId, url, start, end)
 
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, &views.ViewsCountFetchByDate{
@@ -194,12 +208,13 @@ func main() {
 	})
 
 	e.GET("/accounts/token", func(c echo.Context) error {
-		if err := userAuth(c); err != nil {
+		accountId, err := userAuth(c)
+		if err != nil {
 			return err
 		}
 
 		email, _, _ := extractAuth(c)
-		token, err := accounts.CreateAccessToken(email)
+		token, err := accounts.CreateAccessToken(accountId)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, &accounts.AccountResponse{
 				Status:  "fail",

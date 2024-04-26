@@ -32,51 +32,62 @@ type ViewsCountFetchByDate struct {
 // Setup table to store overall pageviews
 func SetupViews() {
 	_, err := db.Database.Exec(`CREATE TABLE IF NOT EXISTS page_views (
-			id SERIAL PRIMARY KEY,
-			url TEXT NOT NULL,
-			count INT NOT NULL DEFAULT 0,
-			UNIQUE(url)
-		)`)
+		id SERIAL PRIMARY KEY,
+		accountId INT NOT NULL,
+		url TEXT NOT NULL,
+		count INT NOT NULL DEFAULT 0,
+		UNIQUE(accountId, url)
+	)`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Database.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS page_views_accountId_url
+		ON page_views (accountId, url)
+	`)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Setup table to store individual pageviews
 	_, err = db.Database.Exec(`CREATE TABLE IF NOT EXISTS page_views_individual (
-			id SERIAL PRIMARY KEY,
-			url TEXT NOT NULL,
-			createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`)
+		id SERIAL PRIMARY KEY,
+		accountId INT NOT NULL,
+		url TEXT NOT NULL,
+		createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	)`)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 // Increment the page view count for a URL
-func IncrementPageView(url string) error {
+func IncrementPageView(accountId int, url string) error {
 	_, err := db.Database.Exec(`
-		INSERT INTO page_views (url, count)
-		VALUES ($1, 1) ON CONFLICT (url)
-		DO UPDATE SET count = page_views.count + 1`, url)
+		INSERT INTO page_views (accountId, url, count)
+		VALUES ($1, $2, 1) ON CONFLICT (accountId, url)
+		DO UPDATE SET count = page_views.count + 1`, accountId, url)
 	if err != nil {
 		return err
 	}
 
 	_, err = db.Database.Exec(`
-		INSERT INTO page_views_individual (url)
-		VALUES ($1)
-	`, url)
+		INSERT INTO page_views_individual (accountId, url)
+		VALUES ($1, $2)
+	`, accountId, url)
 
 	return err
 }
 
 // Retrieve page views for a given URL, return 0 count if not found
-func FetchPageViews(url string) int {
+func FetchPageViews(accountId int, url string) int {
 	fmt.Println("Fetch pageviews for: " + url)
 	row := db.Database.QueryRow(`
 		SELECT count
 		FROM page_views
-		WHERE url = $1`, url)
+		WHERE url = $1
+		AND accountId = $2`, url, accountId)
 
 	var count int
 	err := row.Scan(&count)
@@ -98,6 +109,7 @@ type PageViews []struct {
 }
 
 func FetchPageViewsByDate(
+	accountId int,
 	url string,
 	start string,
 	end string,
@@ -109,8 +121,10 @@ func FetchPageViewsByDate(
 	rows, err := db.Database.Query(`
 		SELECT createdAt
 		FROM page_views_individual
-		WHERE url = $1 AND createdAt BETWEEN $2 AND $3
-	`, url, start, end)
+		WHERE url = $1
+		AND createdAt BETWEEN $2 AND $3
+		AND accountId = $4
+	`, url, start, end, accountId)
 
 	if err != nil {
 		return pageViews, err
