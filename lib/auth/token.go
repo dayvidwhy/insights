@@ -16,15 +16,15 @@ import (
 
 // Validate whether the token is valid
 func validateAccessToken(token string) error {
-	row := db.Database.QueryRow(`
-		SELECT token, expiry FROM access_tokens
-		WHERE token = $1`,
-		token)
-
 	var queriedToken string
 	var expiry int64
-	err := row.Scan(&queriedToken, &expiry)
+	err := db.Database.QueryRow(`
+		SELECT token, expiry FROM access_tokens
+		WHERE token = $1`,
+		token).Scan(&queriedToken, &expiry)
+
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -41,12 +41,15 @@ func TokenAuth(c echo.Context) (string, error) {
 	auth := c.Request().Header.Get("Authorization")
 
 	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
-		return "", errors.New("authentication required")
+		err := errors.New("authentication required")
+		log.Println(err)
+		return "", err
 	}
 	token := strings.TrimPrefix(auth, "Bearer ")
 
 	var err = validateAccessToken(token)
 	if err != nil {
+		log.Println(err)
 		return "", errors.New("invalid token")
 	}
 
@@ -54,13 +57,13 @@ func TokenAuth(c echo.Context) (string, error) {
 }
 
 func GetAccountIdFromToken(token string) (int, error) {
-	row := db.Database.QueryRow(`
-		SELECT accountId FROM access_tokens
-		WHERE token = $1`, token)
-
 	var accountId int
-	err := row.Scan(&accountId)
+	err := db.Database.QueryRow(`
+		SELECT accountId FROM access_tokens
+		WHERE token = $1`, token).Scan(&accountId)
+
 	if err != nil {
+		log.Println(err)
 		return 0, errors.New("invalid token")
 	}
 
@@ -70,14 +73,14 @@ func GetAccountIdFromToken(token string) (int, error) {
 // Remove the access token from the database
 func deleteAccessToken(accountId int, tokenId int) error {
 	// validate that the user owns the token
-	row := db.Database.QueryRow(`
+	var id int
+	err := db.Database.QueryRow(`
 		SELECT id FROM access_tokens
 		WHERE id = $1 AND accountId = $2
-	`, tokenId, accountId)
+	`, tokenId, accountId).Scan(&id)
 
-	var id int
-	err := row.Scan(&id)
 	if err != nil {
+		log.Println(err)
 		return errors.New("issue revoking token")
 	}
 
@@ -87,6 +90,7 @@ func deleteAccessToken(accountId int, tokenId int) error {
 		WHERE id = $1 AND accountId = $2`,
 		tokenId, accountId)
 	if err != nil {
+		log.Println(err)
 		return errors.New("issue revoking token")
 	}
 
@@ -103,6 +107,7 @@ func RevokeAccessToken(c echo.Context) error {
 		TokenId int `json:"tokenId"`
 	}
 	if err := c.Bind(&tokenPayload); err != nil {
+		log.Println(err)
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
 	}
 
@@ -112,7 +117,6 @@ func RevokeAccessToken(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &accounts.AccountResponse{
-		Status:  "success",
 		Message: "Token has been revoked.",
 	})
 }
@@ -122,6 +126,7 @@ func generateToken(length int) (string, error) {
 	b := make([]byte, length)
 	_, err := rand.Read(b)
 	if err != nil {
+		log.Println(err)
 		return "", err
 	}
 
@@ -132,23 +137,20 @@ func createAccessToken(accountId int) (string, int64, error) {
 	// Generate a random token
 	token, err := generateToken(64)
 	if err != nil {
-		log.Println(err)
-		log.Println("Error creating access token")
 		return "", 0, err
 	}
 
 	// insert token into the db, set expiry to be 30 days from now
-	row := db.Database.QueryRow(`
+	var tokenId int64
+	err = db.Database.QueryRow(`
 		INSERT INTO access_tokens (token, expiry, accountId)
 		VALUES ($1, $2, $3)
 		RETURNING id`,
 		token,
 		time.Now().AddDate(0, 0, 30).UTC().UnixMilli(),
 		accountId,
-	)
+	).Scan(&tokenId)
 
-	var tokenId int64
-	err = row.Scan(&tokenId)
 	if err != nil {
 		log.Println(err)
 		return "", 0, err
@@ -163,6 +165,7 @@ func GetAccessToken(c echo.Context) error {
 	accountId, err := GetAccountIdFromJwt(c)
 	log.Println("Account ID: ", accountId)
 	if err != nil {
+		log.Println(err)
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
 	}
 
@@ -172,7 +175,6 @@ func GetAccessToken(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &accounts.AccountTokenResponse{
-		Status:  "success",
 		Message: "Authorized",
 		Token:   token,
 		TokenId: tokenId,

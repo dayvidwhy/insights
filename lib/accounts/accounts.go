@@ -16,12 +16,10 @@ type User struct {
 }
 
 type AccountResponse struct {
-	Status  string `json:"status"`
 	Message string `json:"message"`
 }
 
 type AccountTokenResponse struct {
-	Status  string `json:"status"`
 	Message string `json:"message"`
 	Token   string `json:"token"`
 	TokenId int64  `json:"tokenId"`
@@ -57,19 +55,21 @@ func storeUserAccount(
 	password string,
 ) error {
 	// Check if the user already exists
-	row := db.Database.QueryRow(`
+	var queriedEmail string
+	err := db.Database.QueryRow(`
 		SELECT email
 		FROM accounts
-		WHERE email = $1`, email)
-	var queriedEmail string
-	err := row.Scan(&queriedEmail)
+		WHERE email = $1`, email).Scan(&queriedEmail)
+
 	if err == nil {
+		log.Println(err)
 		return errors.New("user already exists")
 	}
 
 	// hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -103,7 +103,6 @@ func CreateAccount(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &AccountResponse{
-		Status:  "success",
 		Message: "Account has been created.",
 	})
 }

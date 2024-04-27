@@ -12,15 +12,14 @@ import (
 
 func checkUserLogin(email string, password string) (int, error) {
 	// Check if the user exists
-	row := db.Database.QueryRow(`
-		SELECT email, password, id
-		FROM accounts
-		WHERE email = $1`, email)
-
 	var queriedEmail string
 	var queriedPassword string
 	var queriedId int
-	err := row.Scan(&queriedEmail, &queriedPassword, &queriedId)
+	err := db.Database.QueryRow(`
+		SELECT email, password, id
+		FROM accounts
+		WHERE email = $1`, email).Scan(&queriedEmail, &queriedPassword, &queriedId)
+
 	if err != nil {
 		log.Println("Error logging in user id: " + email + "err: " + err.Error())
 		return 0, err
@@ -39,7 +38,8 @@ func checkUserLogin(email string, password string) (int, error) {
 func LoginUser(c echo.Context) error {
 	u := new(accounts.User)
 	if err := c.Bind(u); err != nil {
-		return err
+		log.Println(err)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid credentials.")
 	}
 
 	accountId, err := checkUserLogin(u.Email, u.Password)

@@ -13,15 +13,13 @@ import (
 
 // Response type for counting views
 type ViewCountResponse struct {
-	Status  string `json:"status"`
 	Message string `json:"message"`
 	Url     string `json:"url"`
 }
 
 type ViewsCountFetch struct {
-	Status string `json:"status"`
-	Views  int    `json:"views"`
-	Url    string `json:"url"`
+	Views int    `json:"views"`
+	Url   string `json:"url"`
 }
 
 type PageView struct {
@@ -31,11 +29,10 @@ type PageView struct {
 type PageViews []PageView
 
 type ViewsCountFetchByDate struct {
-	Status string    `json:"status"`
-	Start  string    `json:"start"`
-	End    string    `json:"end"`
-	Url    string    `json:"url"`
-	Views  PageViews `json:"views"`
+	Start string    `json:"start"`
+	End   string    `json:"end"`
+	Url   string    `json:"url"`
+	Views PageViews `json:"views"`
 }
 
 type PageViewSubmit struct {
@@ -46,16 +43,8 @@ type PageViewSubmit struct {
 func IncrementViewCounts(c echo.Context) error {
 	token, err := auth.TokenAuth(c)
 	if err != nil {
+		log.Println(err)
 		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
-	}
-
-	u := new(PageViewSubmit)
-	if err := c.Bind(u); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
-	}
-
-	if u.Url == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "URL is empty.")
 	}
 
 	// Get the account ID from the token
@@ -64,11 +53,23 @@ func IncrementViewCounts(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 	}
 
+	u := new(PageViewSubmit)
+	if err := c.Bind(u); err != nil {
+		log.Println(err)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
+	}
+
+	if u.Url == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "URL is empty.")
+	}
+
 	log.Println("Tracking URL: " + u.Url)
-	incrementPageView(accountId, u.Url)
+
+	if err := incrementPageView(accountId, u.Url); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error recording page view.")
+	}
 
 	return c.JSON(http.StatusOK, &ViewCountResponse{
-		Status:  "success",
 		Message: "URL has been tracked.",
 		Url:     u.Url,
 	})
@@ -85,9 +86,8 @@ func GetViewCountForUrl(c echo.Context) error {
 	pageViews := fetchPageViews(accountId, url)
 
 	return c.JSON(http.StatusOK, &ViewsCountFetch{
-		Status: "success",
-		Views:  pageViews,
-		Url:    url,
+		Views: pageViews,
+		Url:   url,
 	})
 }
 
@@ -116,11 +116,10 @@ func GetViewsForUrlInRange(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, &ViewsCountFetchByDate{
-		Status: "success",
-		Start:  start,
-		End:    end,
-		Url:    url,
-		Views:  pageViews,
+		Start: start,
+		End:   end,
+		Url:   url,
+		Views: pageViews,
 	})
 }
 
@@ -164,6 +163,7 @@ func incrementPageView(accountId int, url string) error {
 		VALUES ($1, $2, 1) ON CONFLICT (accountId, url)
 		DO UPDATE SET count = page_views.count + 1`, accountId, url)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -172,20 +172,24 @@ func incrementPageView(accountId int, url string) error {
 		VALUES ($1, $2)
 	`, accountId, url)
 
-	return err
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return nil
 }
 
 // Retrieve page views for a given URL, return 0 count if not found
 func fetchPageViews(accountId int, url string) int {
 	log.Println("Fetch pageviews for: " + url)
-	row := db.Database.QueryRow(`
+	var count int
+	err := db.Database.QueryRow(`
 		SELECT count
 		FROM page_views
 		WHERE url = $1
-		AND accountId = $2`, url, accountId)
-
-	var count int
-	err := row.Scan(&count)
+		AND accountId = $2`,
+		url, accountId).Scan(&count)
 
 	// If we don't find a record, return 0
 	if err != nil {
@@ -215,6 +219,7 @@ func fetchAllViews(accountId int) (PageViewCounts, error) {
 		WHERE accountId = $1
 	`, accountId)
 	if err != nil {
+		log.Println(err)
 		return pageViewCounts, errors.New("failed to retrieve page views")
 	}
 
@@ -270,6 +275,7 @@ func fetchPageViewsByDate(
 	`, url, start, end, accountId)
 
 	if err != nil {
+		log.Println(err)
 		return pageViews, err
 	}
 
