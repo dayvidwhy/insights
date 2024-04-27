@@ -37,7 +37,7 @@ func main() {
 	tokens := e.Group("/tokens")
 	tokens.Use(jwtMiddleware)
 	tokens.GET("/create", auth.GetAccessToken)
-	tokens.POST("/revoke", auth.RevokeAccessToken)
+	tokens.DELETE("/revoke", auth.RevokeAccessToken)
 
 	e.Logger.Fatal(e.Start(":1323"))
 }
