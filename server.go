@@ -167,7 +167,7 @@ func getAccessToken(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
 	}
 
-	token, err := accounts.CreateAccessToken(accountId)
+	token, tokenId, err := accounts.CreateAccessToken(accountId)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error creating token.")
 	}
@@ -176,6 +176,30 @@ func getAccessToken(c echo.Context) error {
 		Status:  "success",
 		Message: "Authorized",
 		Token:   token,
+		TokenId: tokenId,
+	})
+}
+
+func revokeAccessToken(c echo.Context) error {
+	accountId, err := getAccountIdFromJwt(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
+	}
+	var tokenPayload struct {
+		TokenId int `json:"tokenId"`
+	}
+	if err := c.Bind(&tokenPayload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
+	}
+
+	err = accounts.RevokeAccessToken(accountId, tokenPayload.TokenId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, &accounts.AccountResponse{
+		Status:  "success",
+		Message: "Token has been revoked.",
 	})
 }
 
@@ -197,7 +221,8 @@ func main() {
 	r.Use(echojwt.JWT([]byte(os.Getenv("JWT_SECRET"))))
 	r.GET("/views/count", countViews)
 	r.GET("/views/counts", viewCounts)
-	r.GET("/accounts/token", getAccessToken)
+	r.GET("/tokens/create", getAccessToken)
+	r.POST("/tokens/revoke", revokeAccessToken)
 
 	e.Logger.Fatal(e.Start(":1323"))
 }

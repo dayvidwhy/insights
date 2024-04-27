@@ -25,6 +25,7 @@ type AccountTokenResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 	Token   string `json:"token"`
+	TokenId int64  `json:"tokenId"`
 }
 
 // Create user accounts tables
@@ -135,27 +136,58 @@ func generateToken(length int) (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-func CreateAccessToken(accountId int) (string, error) {
+func CreateAccessToken(accountId int) (string, int64, error) {
 	// Generate a random token
 	token, err := generateToken(64)
 	if err != nil {
 		log.Println(err)
 		log.Println("Error creating access token")
-		return "", err
+		return "", 0, err
 	}
 
 	// insert token into the db, set expiry to be 30 days from now
-	_, err = db.Database.Exec(`
+	row := db.Database.QueryRow(`
 		INSERT INTO access_tokens (token, expiry, accountId)
-		VALUES ($1, $2, $3)`,
+		VALUES ($1, $2, $3)
+		RETURNING id`,
 		token,
 		time.Now().AddDate(0, 0, 30).UTC().UnixMilli(),
 		accountId,
 	)
+
+	var tokenId int64
+	err = row.Scan(&tokenId)
 	if err != nil {
-		return "", err
+		log.Println(err)
+		return "", 0, err
 	}
-	return token, nil
+
+	return token, tokenId, nil
+}
+
+func RevokeAccessToken(accountId int, tokenId int) error {
+	// validate that the user owns the token
+	row := db.Database.QueryRow(`
+		SELECT id FROM access_tokens
+		WHERE id = $1 AND accountId = $2
+	`, tokenId, accountId)
+
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		return errors.New("issue revoking token")
+	}
+
+	// remove the token from the db
+	_, err = db.Database.Exec(`
+		DELETE FROM access_tokens
+		WHERE id = $1 AND accountId = $2`,
+		tokenId, accountId)
+	if err != nil {
+		return errors.New("issue revoking token")
+	}
+
+	return nil
 }
 
 // Validate whether the token is valid
