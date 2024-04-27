@@ -28,9 +28,7 @@ type PageView struct {
 	Time string `json:"time"`
 }
 
-type PageViews []struct {
-	Time string `json:"time"`
-}
+type PageViews []PageView
 
 type ViewsCountFetchByDate struct {
 	Status string    `json:"status"`
@@ -202,10 +200,7 @@ type PageViewCount struct {
 	Count int    `json:"count"`
 }
 
-type PageViewCounts []struct {
-	Url   string `json:"url"`
-	Count int    `json:"count"`
-}
+type PageViewCounts []PageViewCount
 
 type AllPageViewCountsResponse struct {
 	Status string         `json:"status"`
