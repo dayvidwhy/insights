@@ -2,7 +2,12 @@ package views
 
 import (
 	db "insights/db"
+	"insights/lib/auth"
 	"log"
+	"net/http"
+	"time"
+
+	"github.com/labstack/echo/v4"
 )
 
 // Response type for counting views
@@ -36,6 +41,88 @@ type ViewsCountFetchByDate struct {
 
 type PageViewSubmit struct {
 	Url string `json:"url"`
+}
+
+// Receive page views from clients
+func IncrementViewCounts(c echo.Context) error {
+	token, err := auth.TokenAuth(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+	}
+
+	u := new(PageViewSubmit)
+	if err := c.Bind(u); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
+	}
+
+	if u.Url == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "URL is empty.")
+	}
+
+	// Get the account ID from the token
+	accountId, err := auth.GetAccountIdFromToken(token)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+	}
+
+	log.Println("Tracking URL: " + u.Url)
+	IncrementPageView(accountId, u.Url)
+
+	return c.JSON(http.StatusOK, &ViewCountResponse{
+		Status:  "success",
+		Message: "URL has been tracked.",
+		Url:     u.Url,
+	})
+}
+
+// Returns the total number of views for a given URL
+func GetViewCountForUrl(c echo.Context) error {
+	accountId, err := auth.GetAccountIdFromJwt(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
+	}
+
+	url := c.QueryParam("url")
+	pageViews := FetchPageViews(accountId, url)
+
+	return c.JSON(http.StatusOK, &ViewsCountFetch{
+		Status: "success",
+		Views:  pageViews,
+		Url:    url,
+	})
+}
+
+// Returns a list of views between two dates
+func GetViewsForUrlInRange(c echo.Context) error {
+	accountId, err := auth.GetAccountIdFromJwt(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
+	}
+
+	url := c.QueryParam("url")
+	start := c.QueryParam("start")
+	end := c.QueryParam("end")
+	_, err = time.Parse("2006-01-02 15:04:05.000", start)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date:"+start+". Please use UTC in the format: yyyy-mm-dd hh:mm:ss.fff")
+	}
+	_, err = time.Parse("2006-01-02 15:04:05.000", end)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date:"+end+". Please use UTC in the format: yyyy-mm-dd hh:mm:ss.fff")
+	}
+	pageViews, err := FetchPageViewsByDate(accountId, url, start, end)
+
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error fetching page views by date.")
+	}
+
+	return c.JSON(http.StatusOK, &ViewsCountFetchByDate{
+		Status: "success",
+		Start:  start,
+		End:    end,
+		Url:    url,
+		Views:  pageViews,
+	})
 }
 
 // Setup table to store overall pageviews
