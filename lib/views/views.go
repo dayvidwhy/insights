@@ -66,7 +66,7 @@ func IncrementViewCounts(c echo.Context) error {
 	}
 
 	log.Println("Tracking URL: " + u.Url)
-	IncrementPageView(accountId, u.Url)
+	incrementPageView(accountId, u.Url)
 
 	return c.JSON(http.StatusOK, &ViewCountResponse{
 		Status:  "success",
@@ -83,7 +83,7 @@ func GetViewCountForUrl(c echo.Context) error {
 	}
 
 	url := c.QueryParam("url")
-	pageViews := FetchPageViews(accountId, url)
+	pageViews := fetchPageViews(accountId, url)
 
 	return c.JSON(http.StatusOK, &ViewsCountFetch{
 		Status: "success",
@@ -110,7 +110,7 @@ func GetViewsForUrlInRange(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date:"+end+". Please use UTC in the format: yyyy-mm-dd hh:mm:ss.fff")
 	}
-	pageViews, err := FetchPageViewsByDate(accountId, url, start, end)
+	pageViews, err := fetchPageViewsByDate(accountId, url, start, end)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error fetching page views by date.")
@@ -159,7 +159,7 @@ func SetupViews() {
 }
 
 // Increment the page view count for a URL
-func IncrementPageView(accountId int, url string) error {
+func incrementPageView(accountId int, url string) error {
 	_, err := db.Database.Exec(`
 		INSERT INTO page_views (accountId, url, count)
 		VALUES ($1, $2, 1) ON CONFLICT (accountId, url)
@@ -177,7 +177,7 @@ func IncrementPageView(accountId int, url string) error {
 }
 
 // Retrieve page views for a given URL, return 0 count if not found
-func FetchPageViews(accountId int, url string) int {
+func fetchPageViews(accountId int, url string) int {
 	log.Println("Fetch pageviews for: " + url)
 	row := db.Database.QueryRow(`
 		SELECT count
@@ -196,7 +196,7 @@ func FetchPageViews(accountId int, url string) int {
 	return count
 }
 
-func FetchPageViewsByDate(
+func fetchPageViewsByDate(
 	accountId int,
 	url string,
 	start string,

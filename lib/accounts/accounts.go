@@ -52,7 +52,7 @@ func SetupAccounts() {
 	}
 }
 
-func StoreUserAccount(
+func storeUserAccount(
 	email string,
 	password string,
 ) error {
@@ -96,7 +96,7 @@ func CreateAccount(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Email or password is empty.")
 	}
 
-	err := StoreUserAccount(u.Email, u.Password)
+	err := storeUserAccount(u.Email, u.Password)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error creating account.")

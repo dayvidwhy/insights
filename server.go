@@ -24,17 +24,17 @@ func main() {
 	// Access token routes
 	e.POST("/create-view", views.IncrementViewCounts)
 
-	jwtConfig := auth.GetJwtMiddleware()
+	jwtMiddleware := auth.GetJwtMiddleware()
 
 	// Protected routes
 	viewRoutes := e.Group("/views")
-	viewRoutes.Use(jwtConfig)
+	viewRoutes.Use(jwtMiddleware)
 	viewRoutes.GET("/count", views.GetViewCountForUrl)
 	viewRoutes.GET("/counts", views.GetViewsForUrlInRange)
 
 	// Token routes
 	tokens := e.Group("/tokens")
-	tokens.Use(jwtConfig)
+	tokens.Use(jwtMiddleware)
 	tokens.GET("/create", auth.GetAccessToken)
 	tokens.POST("/revoke", auth.RevokeAccessToken)
 
