@@ -1,6 +1,7 @@
 package views
 
 import (
+	"errors"
 	db "insights/db"
 	"insights/lib/auth"
 	"log"
@@ -32,11 +33,11 @@ type PageViews []struct {
 }
 
 type ViewsCountFetchByDate struct {
-	Status string `json:"status"`
-	Start  string `json:"start"`
-	End    string `json:"end"`
-	Url    string `json:"url"`
-	Views  PageViews
+	Status string    `json:"status"`
+	Start  string    `json:"start"`
+	End    string    `json:"end"`
+	Url    string    `json:"url"`
+	Views  PageViews `json:"views"`
 }
 
 type PageViewSubmit struct {
@@ -194,6 +195,65 @@ func fetchPageViews(accountId int, url string) int {
 	}
 
 	return count
+}
+
+type PageViewCount struct {
+	Url   string `json:"url"`
+	Count int    `json:"count"`
+}
+
+type PageViewCounts []struct {
+	Url   string `json:"url"`
+	Count int    `json:"count"`
+}
+
+type AllPageViewCountsResponse struct {
+	Status string         `json:"status"`
+	Views  PageViewCounts `json:"views"`
+}
+
+func fetchAllViews(accountId int) (PageViewCounts, error) {
+	var pageViewCounts PageViewCounts
+	rows, err := db.Database.Query(`
+		SELECT url, count
+		FROM page_views
+		WHERE accountId = $1
+	`, accountId)
+	if err != nil {
+		return pageViewCounts, errors.New("failed to retrieve page views")
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var pageViewCount PageViewCount
+		err := rows.Scan(&pageViewCount.Url, &pageViewCount.Count)
+		if err != nil {
+			log.Println("Error fetching all views: ", err)
+			return nil, err
+		}
+		pageViewCounts = append(pageViewCounts, pageViewCount)
+	}
+
+	return pageViewCounts, nil
+}
+
+// Fetch all urls tracked and associated view counts
+func GetAllViews(c echo.Context) error {
+	accountId, err := auth.GetAccountIdFromJwt(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
+	}
+
+	allPageViews, err := fetchAllViews(accountId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Issue fetching all views")
+	}
+
+	return c.JSON(http.StatusOK, &AllPageViewCountsResponse{
+		Status: "success",
+		Views:  allPageViews,
+	})
 }
 
 func fetchPageViewsByDate(

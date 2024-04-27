@@ -31,6 +31,7 @@ func main() {
 	viewRoutes.Use(jwtMiddleware)
 	viewRoutes.GET("/count", views.GetViewCountForUrl)
 	viewRoutes.GET("/counts", views.GetViewsForUrlInRange)
+	viewRoutes.GET("/all", views.GetAllViews)
 
 	// Token routes
 	tokens := e.Group("/tokens")
