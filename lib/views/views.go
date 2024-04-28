@@ -10,8 +10,8 @@ import (
 )
 
 type ViewsHandler struct {
-	store       *ViewsStore
-	authHandler *auth.AuthHandler
+	store        *ViewsStore
+	tokenHandler *auth.TokenHandler
 }
 
 // Response type for counting views
@@ -54,23 +54,23 @@ type AllPageViewCountsResponse struct {
 	Views  PageViewCounts `json:"views"`
 }
 
-func NewViews(store *ViewsStore, authHandler *auth.AuthHandler) *ViewsHandler {
+func NewViews(store *ViewsStore, tokenHandler *auth.TokenHandler) *ViewsHandler {
 	return &ViewsHandler{
-		store:       store,
-		authHandler: authHandler,
+		store:        store,
+		tokenHandler: tokenHandler,
 	}
 }
 
 // Receive page views from clients
 func (vh *ViewsHandler) IncrementViewCounts(c echo.Context) error {
-	token, err := vh.authHandler.TokenAuth(c)
+	token, err := vh.tokenHandler.TokenAuth(c)
 	if err != nil {
 		log.Println(err)
 		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 	}
 
 	// Get the account ID from the token
-	accountId, err := vh.authHandler.GetAccountId(token)
+	accountId, err := vh.tokenHandler.GetAccountId(token)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 	}

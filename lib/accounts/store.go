@@ -24,18 +24,6 @@ func SetupAccounts(db *sql.DB) *AccountsStore {
 		log.Fatal(err)
 	}
 
-	// Setup table to store access tokens
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS access_tokens (
-		id SERIAL PRIMARY KEY,
-		accountId INT NOT NULL,
-		token TEXT NOT NULL,
-		expiry BIGINT NOT NULL,
-		createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	)`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	return &AccountsStore{db}
 }
 

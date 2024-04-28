@@ -15,16 +15,18 @@ func main() {
 	e := echo.New()
 
 	// Instantiate DB handler
-	databaseSetup := database.SetupDb()
+	db := database.SetupDb()
 
 	// Setup stores that interact with DB
-	authStore := auth.SetupAuth(databaseSetup)
-	viewsStore := views.SetupViews(databaseSetup)
-	accountsStore := accounts.SetupAccounts(databaseSetup)
+	authStore := auth.SetupAuth(db)
+	tokenStore := auth.SetupTokens(db)
+	viewsStore := views.SetupViews(db)
+	accountsStore := accounts.SetupAccounts(db)
 
 	// Pass stores to endpoint handlers
 	authHandler := auth.NewAuth(authStore)
-	viewsHandler := views.NewViews(viewsStore, authHandler)
+	tokenHandler := auth.NewTokens(tokenStore)
+	viewsHandler := views.NewViews(viewsStore, tokenHandler)
 	accountsHandler := accounts.NewAccounts(accountsStore)
 
 	// Public user routes
@@ -46,8 +48,8 @@ func main() {
 	// Token routes
 	tokens := e.Group("/tokens")
 	tokens.Use(jwtMiddleware)
-	tokens.GET("/create", authHandler.GetAccessToken)
-	tokens.DELETE("/revoke", authHandler.RevokeAccessToken)
+	tokens.GET("/create", tokenHandler.GetAccessToken)
+	tokens.DELETE("/revoke", tokenHandler.RevokeAccessToken)
 
 	e.Logger.Fatal(e.Start(":1323"))
 }

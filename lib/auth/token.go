@@ -8,35 +8,20 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v4"
 )
 
-// Validate whether the token is valid
-func (as *AuthStore) validateAccessToken(token string) error {
-	var queriedToken string
-	var expiry int64
-	err := as.db.QueryRow(`
-		SELECT token, expiry FROM access_tokens
-		WHERE token = $1`,
-		token).Scan(&queriedToken, &expiry)
+type TokenHandler struct {
+	store *TokenStore
+}
 
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	// check whether the token is still valid
-	if expiry < time.Now().UTC().UnixMilli() {
-		return errors.New("token expired")
-	}
-
-	return nil
+func NewTokens(store *TokenStore) *TokenHandler {
+	return &TokenHandler{store}
 }
 
 // Validate access token for posting pageviews from clients
-func (ah *AuthHandler) TokenAuth(c echo.Context) (string, error) {
+func (th *TokenHandler) TokenAuth(c echo.Context) (string, error) {
 	auth := c.Request().Header.Get("Authorization")
 
 	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
@@ -46,7 +31,7 @@ func (ah *AuthHandler) TokenAuth(c echo.Context) (string, error) {
 	}
 	token := strings.TrimPrefix(auth, "Bearer ")
 
-	var err = ah.store.validateAccessToken(token)
+	var err = th.store.validateAccessToken(token)
 	if err != nil {
 		log.Println(err)
 		return "", errors.New("invalid token")
@@ -55,53 +40,12 @@ func (ah *AuthHandler) TokenAuth(c echo.Context) (string, error) {
 	return token, nil
 }
 
-func (as *AuthStore) GetAccountIdFromToken(token string) (int, error) {
-	var accountId int
-	err := as.db.QueryRow(`
-		SELECT accountId FROM access_tokens
-		WHERE token = $1`, token).Scan(&accountId)
-
-	if err != nil {
-		log.Println(err)
-		return 0, errors.New("invalid token")
-	}
-
-	return accountId, nil
-}
-
-func (ah *AuthHandler) GetAccountId(token string) (int, error) {
-	return ah.store.GetAccountIdFromToken(token)
-}
-
-// Remove the access token from the database
-func (as *AuthStore) deleteAccessToken(accountId int, tokenId int) error {
-	// validate that the user owns the token
-	var id int
-	err := as.db.QueryRow(`
-		SELECT id FROM access_tokens
-		WHERE id = $1 AND accountId = $2
-	`, tokenId, accountId).Scan(&id)
-
-	if err != nil {
-		log.Println(err)
-		return errors.New("issue revoking token")
-	}
-
-	// remove the token from the db
-	_, err = as.db.Exec(`
-		DELETE FROM access_tokens
-		WHERE id = $1 AND accountId = $2`,
-		tokenId, accountId)
-	if err != nil {
-		log.Println(err)
-		return errors.New("issue revoking token")
-	}
-
-	return nil
+func (th *TokenHandler) GetAccountId(token string) (int, error) {
+	return th.store.GetAccountIdFromToken(token)
 }
 
 // Handler for revoking a given access token
-func (ah *AuthHandler) RevokeAccessToken(c echo.Context) error {
+func (th *TokenHandler) RevokeAccessToken(c echo.Context) error {
 	accountId, err := GetAccountIdFromJwt(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
@@ -114,7 +58,7 @@ func (ah *AuthHandler) RevokeAccessToken(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
 	}
 
-	err = ah.store.deleteAccessToken(accountId, tokenPayload.TokenId)
+	err = th.store.deleteAccessToken(accountId, tokenPayload.TokenId)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -136,34 +80,8 @@ func generateToken(length int) (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-func (as *AuthStore) createAccessToken(accountId int) (string, int64, error) {
-	// Generate a random token
-	token, err := generateToken(64)
-	if err != nil {
-		return "", 0, err
-	}
-
-	// insert token into the db, set expiry to be 30 days from now
-	var tokenId int64
-	err = as.db.QueryRow(`
-		INSERT INTO access_tokens (token, expiry, accountId)
-		VALUES ($1, $2, $3)
-		RETURNING id`,
-		token,
-		time.Now().AddDate(0, 0, 30).UTC().UnixMilli(),
-		accountId,
-	).Scan(&tokenId)
-
-	if err != nil {
-		log.Println(err)
-		return "", 0, err
-	}
-
-	return token, tokenId, nil
-}
-
 // Generate a client side access token
-func (ah *AuthHandler) GetAccessToken(c echo.Context) error {
+func (th *TokenHandler) GetAccessToken(c echo.Context) error {
 	log.Println("Generating access token")
 	accountId, err := GetAccountIdFromJwt(c)
 	log.Println("Account ID: ", accountId)
@@ -172,7 +90,7 @@ func (ah *AuthHandler) GetAccessToken(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
 	}
 
-	token, tokenId, err := ah.store.createAccessToken(accountId)
+	token, tokenId, err := th.store.createAccessToken(accountId)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error creating token.")
 	}
