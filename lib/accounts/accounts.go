@@ -1,13 +1,9 @@
 package accounts
 
 import (
-	"errors"
-	db "insights/db"
-	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
@@ -25,68 +21,16 @@ type AccountTokenResponse struct {
 	TokenId int64  `json:"tokenId"`
 }
 
-// Create user accounts tables
-func SetupAccounts() {
-	_, err := db.Database.Exec(`CREATE TABLE IF NOT EXISTS accounts (
-		id SERIAL PRIMARY KEY,
-		email TEXT NOT NULL,
-		password TEXT NOT NULL,
-		UNIQUE(email)
-	)`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Setup table to store access tokens
-	_, err = db.Database.Exec(`CREATE TABLE IF NOT EXISTS access_tokens (
-		id SERIAL PRIMARY KEY,
-		accountId INT NOT NULL,
-		token TEXT NOT NULL,
-		expiry BIGINT NOT NULL,
-		createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	)`)
-	if err != nil {
-		log.Fatal(err)
-	}
+type AccountsHandler struct {
+	store *AccountsStore
 }
 
-func storeUserAccount(
-	email string,
-	password string,
-) error {
-	// Check if the user already exists
-	var queriedEmail string
-	err := db.Database.QueryRow(`
-		SELECT email
-		FROM accounts
-		WHERE email = $1`, email).Scan(&queriedEmail)
-
-	if err == nil {
-		log.Println(err)
-		return errors.New("user already exists")
-	}
-
-	// hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	// insert into db
-	_, e := db.Database.Exec(`
-		INSERT INTO accounts (email, password)
-		VALUES ($1, $2)`,
-		email, hashedPassword)
-	if e != nil {
-		return err
-	}
-
-	return nil
+func NewAccounts(store *AccountsStore) *AccountsHandler {
+	return &AccountsHandler{store: store}
 }
 
 // Create a new user account
-func CreateAccount(c echo.Context) error {
+func (ah *AccountsHandler) CreateAccount(c echo.Context) error {
 	u := new(User)
 	if err := c.Bind(u); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid payload.")
@@ -96,7 +40,7 @@ func CreateAccount(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Email or password is empty.")
 	}
 
-	err := storeUserAccount(u.Email, u.Password)
+	err := ah.store.storeUserAccount(u.Email, u.Password)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error creating account.")

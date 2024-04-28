@@ -13,31 +13,41 @@ import (
 
 func main() {
 	e := echo.New()
-	database.SetupDb()
-	views.SetupViews()
-	accounts.SetupAccounts()
+
+	// Instantiate DB handler
+	databaseSetup := database.SetupDb()
+
+	// Setup stores that interact with DB
+	authStore := auth.SetupAuth(databaseSetup)
+	viewsStore := views.SetupViews(databaseSetup)
+	accountsStore := accounts.SetupAccounts(databaseSetup)
+
+	// Pass stores to endpoint handlers
+	authHandler := auth.NewAuth(authStore)
+	viewsHandler := views.NewViews(viewsStore, authHandler)
+	accountsHandler := accounts.NewAccounts(accountsStore)
 
 	// Public user routes
-	e.POST("/register", accounts.CreateAccount)
-	e.POST("/login", auth.LoginUser)
+	e.POST("/register", accountsHandler.CreateAccount)
+	e.POST("/login", authHandler.LoginUser)
 
 	// Access token routes
-	e.POST("/create-view", views.IncrementViewCounts)
+	e.POST("/create-view", viewsHandler.IncrementViewCounts)
 
 	jwtMiddleware := auth.GetJwtMiddleware()
 
 	// Protected routes
 	viewRoutes := e.Group("/views")
 	viewRoutes.Use(jwtMiddleware)
-	viewRoutes.GET("/count", views.GetViewCountForUrl)
-	viewRoutes.GET("/counts", views.GetViewsForUrlInRange)
-	viewRoutes.GET("/all", views.GetAllViews)
+	viewRoutes.GET("/count", viewsHandler.GetViewCountForUrl)
+	viewRoutes.GET("/counts", viewsHandler.GetViewsForUrlInRange)
+	viewRoutes.GET("/all", viewsHandler.GetAllViews)
 
 	// Token routes
 	tokens := e.Group("/tokens")
 	tokens.Use(jwtMiddleware)
-	tokens.GET("/create", auth.GetAccessToken)
-	tokens.DELETE("/revoke", auth.RevokeAccessToken)
+	tokens.GET("/create", authHandler.GetAccessToken)
+	tokens.DELETE("/revoke", authHandler.RevokeAccessToken)
 
 	e.Logger.Fatal(e.Start(":1323"))
 }

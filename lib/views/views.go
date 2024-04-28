@@ -1,8 +1,6 @@
 package views
 
 import (
-	"errors"
-	db "insights/db"
 	"insights/lib/auth"
 	"log"
 	"net/http"
@@ -10,6 +8,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 )
+
+type ViewsHandler struct {
+	store       *ViewsStore
+	authHandler *auth.AuthHandler
+}
 
 // Response type for counting views
 type ViewCountResponse struct {
@@ -39,16 +42,35 @@ type PageViewSubmit struct {
 	Url string `json:"url"`
 }
 
+type PageViewCount struct {
+	Url   string `json:"url"`
+	Count int    `json:"count"`
+}
+
+type PageViewCounts []PageViewCount
+
+type AllPageViewCountsResponse struct {
+	Status string         `json:"status"`
+	Views  PageViewCounts `json:"views"`
+}
+
+func NewViews(store *ViewsStore, authHandler *auth.AuthHandler) *ViewsHandler {
+	return &ViewsHandler{
+		store:       store,
+		authHandler: authHandler,
+	}
+}
+
 // Receive page views from clients
-func IncrementViewCounts(c echo.Context) error {
-	token, err := auth.TokenAuth(c)
+func (vh *ViewsHandler) IncrementViewCounts(c echo.Context) error {
+	token, err := vh.authHandler.TokenAuth(c)
 	if err != nil {
 		log.Println(err)
 		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 	}
 
 	// Get the account ID from the token
-	accountId, err := auth.GetAccountIdFromToken(token)
+	accountId, err := vh.authHandler.GetAccountId(token)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 	}
@@ -65,7 +87,7 @@ func IncrementViewCounts(c echo.Context) error {
 
 	log.Println("Tracking URL: " + u.Url)
 
-	if err := incrementPageView(accountId, u.Url); err != nil {
+	if err := vh.store.incrementPageView(accountId, u.Url); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error recording page view.")
 	}
 
@@ -76,14 +98,14 @@ func IncrementViewCounts(c echo.Context) error {
 }
 
 // Returns the total number of views for a given URL
-func GetViewCountForUrl(c echo.Context) error {
+func (vh *ViewsHandler) GetViewCountForUrl(c echo.Context) error {
 	accountId, err := auth.GetAccountIdFromJwt(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
 	}
 
 	url := c.QueryParam("url")
-	pageViews := fetchPageViews(accountId, url)
+	pageViews := vh.store.fetchPageViews(accountId, url)
 
 	return c.JSON(http.StatusOK, &ViewsCountFetch{
 		Views: pageViews,
@@ -92,7 +114,7 @@ func GetViewCountForUrl(c echo.Context) error {
 }
 
 // Returns a list of views between two dates
-func GetViewsForUrlInRange(c echo.Context) error {
+func (vh *ViewsHandler) GetViewsForUrlInRange(c echo.Context) error {
 	accountId, err := auth.GetAccountIdFromJwt(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
@@ -109,7 +131,7 @@ func GetViewsForUrlInRange(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid start date:"+end+". Please use UTC in the format: yyyy-mm-dd hh:mm:ss.fff")
 	}
-	pageViews, err := fetchPageViewsByDate(accountId, url, start, end)
+	pageViews, err := vh.store.fetchPageViewsByDate(accountId, url, start, end)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error fetching page views by date.")
@@ -123,129 +145,14 @@ func GetViewsForUrlInRange(c echo.Context) error {
 	})
 }
 
-// Setup table to store overall pageviews
-func SetupViews() {
-	_, err := db.Database.Exec(`CREATE TABLE IF NOT EXISTS page_views (
-		id SERIAL PRIMARY KEY,
-		accountId INT NOT NULL,
-		url TEXT NOT NULL,
-		count INT NOT NULL DEFAULT 0,
-		UNIQUE(accountId, url)
-	)`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Database.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS page_views_accountId_url
-		ON page_views (accountId, url)
-	`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Setup table to store individual pageviews
-	_, err = db.Database.Exec(`CREATE TABLE IF NOT EXISTS page_views_individual (
-		id SERIAL PRIMARY KEY,
-		accountId INT NOT NULL,
-		url TEXT NOT NULL,
-		createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	)`)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-// Increment the page view count for a URL
-func incrementPageView(accountId int, url string) error {
-	_, err := db.Database.Exec(`
-		INSERT INTO page_views (accountId, url, count)
-		VALUES ($1, $2, 1) ON CONFLICT (accountId, url)
-		DO UPDATE SET count = page_views.count + 1`, accountId, url)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	_, err = db.Database.Exec(`
-		INSERT INTO page_views_individual (accountId, url)
-		VALUES ($1, $2)
-	`, accountId, url)
-
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	return nil
-}
-
-// Retrieve page views for a given URL, return 0 count if not found
-func fetchPageViews(accountId int, url string) int {
-	log.Println("Fetch pageviews for: " + url)
-	var count int
-	err := db.Database.QueryRow(`
-		SELECT count
-		FROM page_views
-		WHERE url = $1
-		AND accountId = $2`,
-		url, accountId).Scan(&count)
-
-	// If we don't find a record, return 0
-	if err != nil {
-		return 0
-	}
-
-	return count
-}
-
-type PageViewCount struct {
-	Url   string `json:"url"`
-	Count int    `json:"count"`
-}
-
-type PageViewCounts []PageViewCount
-
-type AllPageViewCountsResponse struct {
-	Status string         `json:"status"`
-	Views  PageViewCounts `json:"views"`
-}
-
-func fetchAllViews(accountId int) (PageViewCounts, error) {
-	var pageViewCounts PageViewCounts
-	rows, err := db.Database.Query(`
-		SELECT url, count
-		FROM page_views
-		WHERE accountId = $1
-	`, accountId)
-	if err != nil {
-		log.Println(err)
-		return pageViewCounts, errors.New("failed to retrieve page views")
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var pageViewCount PageViewCount
-		err := rows.Scan(&pageViewCount.Url, &pageViewCount.Count)
-		if err != nil {
-			log.Println("Error fetching all views: ", err)
-			return nil, err
-		}
-		pageViewCounts = append(pageViewCounts, pageViewCount)
-	}
-
-	return pageViewCounts, nil
-}
-
 // Fetch all urls tracked and associated view counts
-func GetAllViews(c echo.Context) error {
+func (vh *ViewsHandler) GetAllViews(c echo.Context) error {
 	accountId, err := auth.GetAccountIdFromJwt(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized")
 	}
 
-	allPageViews, err := fetchAllViews(accountId)
+	allPageViews, err := vh.store.fetchAllViews(accountId)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Issue fetching all views")
 	}
@@ -254,42 +161,4 @@ func GetAllViews(c echo.Context) error {
 		Status: "success",
 		Views:  allPageViews,
 	})
-}
-
-func fetchPageViewsByDate(
-	accountId int,
-	url string,
-	start string,
-	end string,
-) (
-	PageViews,
-	error,
-) {
-	var pageViews PageViews
-	rows, err := db.Database.Query(`
-		SELECT createdAt
-		FROM page_views_individual
-		WHERE url = $1
-		AND createdAt BETWEEN $2 AND $3
-		AND accountId = $4
-	`, url, start, end, accountId)
-
-	if err != nil {
-		log.Println(err)
-		return pageViews, err
-	}
-
-	// defer closing until we're done with the rows
-	defer rows.Close()
-
-	for rows.Next() {
-		var pageView PageView
-		err := rows.Scan(&pageView.Time)
-		if err != nil {
-			log.Println("Error fetching page views by date: ", err)
-			return nil, err
-		}
-		pageViews = append(pageViews, pageView)
-	}
-	return pageViews, nil
 }

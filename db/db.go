@@ -8,11 +8,8 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// Package level variable to hold our DB pointer
-var Database *sql.DB
-
 // Instantiate the database connection
-func SetupDb() {
+func SetupDb() *sql.DB {
 	// Create the connection from env variables
 	connStr := "postgres://" +
 		os.Getenv("POSTGRES_USER") + ":" +
@@ -22,15 +19,16 @@ func SetupDb() {
 
 	// Setup our connection
 	var err error
-	Database, err = sql.Open("postgres", connStr)
+	database, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Test the connection
-	err = Database.Ping()
+	err = database.Ping()
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Connected to database successfully.")
+	return database
 }
