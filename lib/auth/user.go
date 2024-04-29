@@ -6,35 +6,18 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/bcrypt"
 )
 
-func (as *AuthStore) checkUserLogin(email string, password string) (int, error) {
-	// Check if the user exists
-	var queriedEmail string
-	var queriedPassword string
-	var queriedId int
-	err := as.db.QueryRow(`
-		SELECT email, password, id
-		FROM accounts
-		WHERE email = $1`, email).Scan(&queriedEmail, &queriedPassword, &queriedId)
+type UserHandler struct {
+	store *UserStore
+}
 
-	if err != nil {
-		log.Println("Error logging in user id: " + email + "err: " + err.Error())
-		return 0, err
-	}
-
-	// Check if the password matches
-	if err := bcrypt.CompareHashAndPassword([]byte(queriedPassword), []byte(password)); err != nil {
-		log.Println(err)
-		return 0, err
-	}
-
-	return queriedId, nil
+func NewUsers(store *UserStore) *UserHandler {
+	return &UserHandler{store: store}
 }
 
 // Validate user credentials and return a JWT token
-func (ah *AuthHandler) LoginUser(c echo.Context) error {
+func (ah *UserHandler) LoginUser(c echo.Context) error {
 	u := new(accounts.User)
 	if err := c.Bind(u); err != nil {
 		log.Println(err)

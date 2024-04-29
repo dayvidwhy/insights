@@ -18,13 +18,13 @@ func main() {
 	db := database.SetupDb()
 
 	// Setup stores that interact with DB
-	authStore := auth.SetupAuth(db)
+	userStore := auth.SetupUsers(db)
 	tokenStore := auth.SetupTokens(db)
 	viewsStore := views.SetupViews(db)
 	accountsStore := accounts.SetupAccounts(db)
 
 	// Pass stores to endpoint handlers
-	authHandler := auth.NewAuth(authStore)
+	authHandler := auth.NewUsers(userStore)
 	tokenHandler := auth.NewTokens(tokenStore)
 	viewsHandler := views.NewViews(viewsStore, tokenHandler)
 	accountsHandler := accounts.NewAccounts(accountsStore)
